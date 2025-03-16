@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - healthdata-network
+    depends_on:
+      - ganache
+
+  ganache:
+    image: trufflesuite/ganache-cli:latest
+    ports:
+      - "8545:8545"
+    command: --deterministic --networkId 5777 --hostname 0.0.0.0
+    networks:
+      - healthdata-network
+
+networks:
+  healthdata-network:
+    driver: bridge
