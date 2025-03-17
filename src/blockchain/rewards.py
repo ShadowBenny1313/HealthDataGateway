@@ -193,7 +193,8 @@ def get_reward_balance(user_id: str) -> Dict[str, Any]:
             logger.info(f"Simulating reward balance retrieval for {user_id}")
             # Generate a deterministic balance based on user_id to ensure consistent results
             import hashlib
-            hash_val = int(hashlib.md5(user_id.encode()).hexdigest(), 16) % 1000
+            # Using SHA-256 instead of MD5 for stronger cryptographic security
+            hash_val = int(hashlib.sha256(user_id.encode()).hexdigest(), 16) % 1000
             return {
                 "success": True,
                 "simulated": True,

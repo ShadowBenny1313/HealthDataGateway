@@ -79,6 +79,7 @@ contract HealthDataRewards {
      * @return bool Success of the approval
      */
     function approve(address _spender, uint256 _value) public returns (bool) {
+        require(_spender != address(0), "Approve to zero address");
         allowed[msg.sender][_spender] = _value;
         emit Approval(msg.sender, _spender, _value);
         return true;

@@ -46,6 +46,8 @@ contract DataConsent {
         patientConsent[patientId][requester] = true;
         
         // Set expiration time based on duration days
+        // SECURITY NOTE: While block.timestamp is not ideal for precise timing, 
+        // it's acceptable for consent expiration with day-level precision
         uint256 expirationTime = block.timestamp + (durationDays * 1 days);
         consentExpiration[patientId][requester] = expirationTime;
         
@@ -79,6 +81,8 @@ contract DataConsent {
         bool hasConsent = patientConsent[patientId][requester];
         uint256 expiration = consentExpiration[patientId][requester];
         
+        // SECURITY NOTE: While block.timestamp can be influenced by miners, 
+        // the precision needed for consent validation is in days, making this acceptable
         return hasConsent && (expiration > block.timestamp);
     }
     

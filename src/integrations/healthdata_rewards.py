@@ -270,7 +270,8 @@ def get_user_reward_balance(user_id: str) -> Dict[str, Any]:
     if MOCK_MODE:
         # In mock mode, generate a deterministic mock balance based on user_id
         import hashlib
-        hash_val = int(hashlib.md5(user_id.encode()).hexdigest(), 16) % 1000
+        # Using SHA-256 instead of MD5 for stronger cryptographic security
+        hash_val = int(hashlib.sha256(user_id.encode()).hexdigest(), 16) % 1000
         logger.info(f"[MOCK] Retrieved balance for {user_id}: {hash_val} tokens")
         
         # Create a realistic-looking reward balance
