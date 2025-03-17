@@ -67,6 +67,17 @@ app.include_router(wearables_router)
 app.include_router(provider_registry_router)
 app.include_router(dashboard_router)
 
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint for monitoring and CI/CD pipeline
+    """
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "0.2.0"
+    }
+
 @app.get("/")
 async def root():
     """
