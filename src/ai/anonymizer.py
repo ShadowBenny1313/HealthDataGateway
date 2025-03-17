@@ -49,9 +49,136 @@ class Anonymizer:
             preserve_age: Whether to preserve patient age (range) in anonymized data
             preserve_gender: Whether to preserve patient gender in anonymized data
         """
-        self.salt = salt or str(uuid.uuid4())
+        self.salt = salt if salt else str(uuid.uuid4())
         self.preserve_age = preserve_age
         self.preserve_gender = preserve_gender
+        self.pii_lookup = {}
+        
+    def anonymize(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Anonymize FHIR data by removing or replacing personally identifiable information
+        
+        Args:
+            data: FHIR data to anonymize (as dictionary)
+            
+        Returns:
+            Anonymized version of the data
+        """
+        logger.info(f"Anonymizing FHIR data")
+        
+        # Create a deep copy of the data to avoid modifying the original
+        import copy
+        anonymized_data = copy.deepcopy(data)
+        
+        # If this is a FHIR Bundle, process each entry
+        if "resourceType" in anonymized_data and anonymized_data["resourceType"] == "Bundle" and "entry" in anonymized_data:
+            for i, entry in enumerate(anonymized_data["entry"]):
+                if "resource" in entry:
+                    anonymized_data["entry"][i]["resource"] = self._anonymize_resource(entry["resource"])
+        else:
+            # Single resource
+            anonymized_data = self._anonymize_resource(anonymized_data)
+            
+        logger.info(f"Successfully anonymized data")
+        return anonymized_data
+    
+    def _anonymize_resource(self, resource: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Anonymize a single FHIR resource
+        
+        Args:
+            resource: FHIR resource to anonymize
+            
+        Returns:
+            Anonymized version of the resource
+        """
+        resource_type = resource.get("resourceType")
+        
+        # Resource-specific anonymization
+        if resource_type == "Patient":
+            # Anonymize patient identifier
+            if "identifier" in resource:
+                for i, identifier in enumerate(resource["identifier"]):
+                    if "value" in identifier:
+                        resource["identifier"][i]["value"] = self._anonymize_pii(identifier["value"], "ID")
+            
+            # Anonymize patient name
+            if "name" in resource:
+                for i, name in enumerate(resource["name"]):
+                    if "text" in name:
+                        resource["name"][i]["text"] = self._anonymize_pii(name["text"], "NAME")
+                    if "family" in name:
+                        resource["name"][i]["family"] = self._anonymize_pii(name["family"], "NAME")
+                    if "given" in name and isinstance(name["given"], list):
+                        for j, given in enumerate(name["given"]):
+                            resource["name"][i]["given"][j] = self._anonymize_pii(given, "NAME")
+            
+            # Transform birthDate if needed (but preserve age if configured)
+            if "birthDate" in resource and self.preserve_age:
+                resource["birthDate"] = self._anonymize_pii(resource["birthDate"], "DOB")
+            elif "birthDate" in resource and not self.preserve_age:
+                # Remove birthDate entirely if we don't need to preserve age
+                del resource["birthDate"]
+            
+            # Handle contact information
+            if "telecom" in resource:
+                for i, telecom in enumerate(resource["telecom"]):
+                    if "value" in telecom:
+                        if telecom.get("system") == "phone":
+                            resource["telecom"][i]["value"] = self._anonymize_pii(telecom["value"], "PHONE")
+                        elif telecom.get("system") == "email":
+                            resource["telecom"][i]["value"] = self._anonymize_pii(telecom["value"], "EMAIL")
+                        else:
+                            resource["telecom"][i]["value"] = self._anonymize_pii(telecom["value"], "ID")
+            
+            # Handle address
+            if "address" in resource:
+                for i, address in enumerate(resource["address"]):
+                    if "text" in address:
+                        resource["address"][i]["text"] = self._anonymize_pii(address["text"], "ADDRESS")
+                    if "line" in address and isinstance(address["line"], list):
+                        for j, line in enumerate(address["line"]):
+                            resource["address"][i]["line"][j] = self._anonymize_pii(line, "ADDRESS")
+        
+        # Handle other resource types
+        elif resource_type in ["Practitioner", "RelatedPerson", "Person"]:
+            # Similar anonymization as Patient
+            # Anonymize identifier and name
+            if "identifier" in resource:
+                for i, identifier in enumerate(resource["identifier"]):
+                    if "value" in identifier:
+                        resource["identifier"][i]["value"] = self._anonymize_pii(identifier["value"], "ID")
+            
+            if "name" in resource:
+                for i, name in enumerate(resource["name"]):
+                    if "text" in name:
+                        resource["name"][i]["text"] = self._anonymize_pii(name["text"], "NAME")
+                    if "family" in name:
+                        resource["name"][i]["family"] = self._anonymize_pii(name["family"], "NAME")
+                    if "given" in name and isinstance(name["given"], list):
+                        for j, given in enumerate(name["given"]):
+                            resource["name"][i]["given"][j] = self._anonymize_pii(given, "NAME")
+        
+        # For all resource types, ensure IDs are anonymized
+        if "id" in resource:
+            resource["id"] = self._anonymize_pii(resource["id"], "ID")
+            
+        # Add metadata to indicate data is anonymized
+        if "meta" not in resource:
+            resource["meta"] = {}
+        if "security" not in resource["meta"]:
+            resource["meta"]["security"] = []
+            
+        # Add security tag to indicate data has been anonymized
+        resource["meta"]["security"].append({
+            "system": "http://healthdatagateway.org/security",
+            "code": "anonymized",
+            "display": "Anonymized Data"
+        })
+            
+        return resource
+        
+    def _anonymize_pii(self, identifier: str, pii_type: str) -> str:
         
         # PII lookup stores the mapping of original values to anonymized values
         # for consistent anonymization across multiple calls
@@ -255,14 +382,14 @@ class Anonymizer:
         
         # Generate a new anonymized value based on the PII type
         if pii_type == "NAME":
-            # Create a hash of the original name
-            hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+            # Create a hash of the original name using secure SHA-256
+            hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
             # Use the hash to generate a synthetic name
             anonymized = f"Person-{hash_val[:8]}"
             
         elif pii_type == "ID":
-            # Create a deterministic but anonymized ID
-            hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+            # Create a deterministic but anonymized ID using secure SHA-256
+            hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
             anonymized = f"ID-{hash_val[:12]}"
             
         elif pii_type == "DOB":
@@ -279,34 +406,34 @@ class Anonymizer:
                     
                 anonymized = new_date.strftime("%Y-%m-%d")
             except:
-                # If we can't parse the date, use a hash
-                hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+                # If we can't parse the date, use a secure hash
+                hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
                 anonymized = f"Date-{hash_val[:8]}"
                 
         elif pii_type == "ADDRESS":
-            # Create a synthetic address
-            hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+            # Create a synthetic address using secure SHA-256
+            hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
             anonymized = f"Address-{hash_val[:8]}"
             
         elif pii_type == "PHONE":
-            # Create a synthetic phone number
-            hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+            # Create a synthetic phone number using secure SHA-256
+            hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
             # Generate a random but valid-looking US phone number
             anonymized = f"555-{hash_val[:3]}-{hash_val[3:7]}"
             
         elif pii_type == "EMAIL":
-            # Create a synthetic email
-            hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+            # Create a synthetic email using secure SHA-256
+            hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
             anonymized = f"person.{hash_val[:8]}@example.com"
             
         elif pii_type == "SSN":
-            # Create a synthetic SSN
-            hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+            # Create a synthetic SSN using secure SHA-256
+            hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
             anonymized = f"XXX-XX-{hash_val[:4]}"
             
         else:
-            # Default anonymization for other types
-            hash_val = hashlib.md5(f"{self.salt}:{identifier}".encode()).hexdigest()
+            # Default anonymization for other types using secure SHA-256
+            hash_val = hashlib.sha256(f"{self.salt}:{identifier}".encode()).hexdigest()
             anonymized = f"Anon-{hash_val[:8]}"
         
         # Store the mapping for future use

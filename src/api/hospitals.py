@@ -63,6 +63,32 @@ async def get_patient_data(
     # Standardize data to FHIR
     fhir_data = standardize_to_fhir(raw_data, "hospital")
     
+    # Issue rewards for data sharing
+    try:
+        from ..integrations.healthdata_rewards import sync_data_sharing_rewards
+        
+        # Count data points for reward calculation (entries in FHIR bundle)
+        data_points = len(fhir_data.get("entry", [])) if isinstance(fhir_data, dict) else 1
+        
+        # Sync rewards with HealthData Rewards platform
+        rewards_result = sync_data_sharing_rewards(
+            user_id=patient_id,
+            data_type="hospital",
+            data_points=data_points
+        )
+        
+        # Add rewards information to response
+        if rewards_result:
+            fhir_data["_rewards"] = {
+                "issued": True,
+                "data_points": data_points,
+                "data_type": "hospital"
+            }
+    except Exception as e:
+        # Log error but don't fail the entire request
+        import logging
+        logging.error(f"Failed to issue rewards: {str(e)}")
+    
     return fhir_data
 
 def retrieve_from_hospital_system(hospital_id: str, patient_id: str) -> Dict:

@@ -124,6 +124,7 @@ contract HealthDataRewards {
     function issueReward(address _user, string memory _dataType, uint256 _qualityLevel) public onlyOwner returns (bool) {
         require(_user != address(0), "Reward to zero address");
         require(_qualityLevel <= 2, "Invalid quality level");
+        require(bytes(_dataType).length > 0, "Data type cannot be empty");
         
         uint256 rewardAmount = calculateReward(_dataType, _qualityLevel);
         

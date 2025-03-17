@@ -70,6 +70,33 @@ async def get_wearable_data(
     # Standardize data to FHIR
     fhir_data = standardize_to_fhir(raw_data, "wearable")
     
+    # Issue rewards for data sharing
+    try:
+        from ..integrations.healthdata_rewards import sync_data_sharing_rewards
+        
+        # Count data points for reward calculation
+        # For wearables, we reward based on days of data provided
+        data_points = days
+        
+        # Sync rewards with HealthData Rewards platform
+        rewards_result = sync_data_sharing_rewards(
+            user_id=user_id,
+            data_type="wearable",
+            data_points=data_points
+        )
+        
+        # Add rewards information to response
+        if rewards_result:
+            fhir_data["_rewards"] = {
+                "issued": True,
+                "data_points": data_points,
+                "data_type": "wearable"
+            }
+    except Exception as e:
+        # Log error but don't fail the entire request
+        import logging
+        logging.error(f"Failed to issue wearable data rewards: {str(e)}")
+    
     return fhir_data
 
 @router.get("/{wearable_id}/user/{user_id}/metrics/{metric_type}")

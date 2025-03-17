@@ -1,8 +1,29 @@
-fastapi==0.95.0
-uvicorn==0.21.1
-pydantic==1.10.7
-python-dotenv==1.0.0
-web3==6.0.0
-requests==2.28.2
-python-multipart==0.0.6  # For OAuth2 password form
-PyJWT==2.6.0  # For JWT token handling
+# API Framework
+fastapi==0.115.0
+uvicorn==0.34.0
+pydantic==2.10.6
+python-dotenv==1.0.1
+requests==2.31.0
+python-multipart==0.0.9  # For OAuth2 password form
+PyJWT==2.10.1  # For JWT token handling
+email-validator==2.1.0  # Required for pydantic EmailStr
+
+# Web3 and blockchain dependencies
+web3==7.9.0
+hexbytes==1.3.0
+eth-account==0.13.5
+eth-utils==5.2.0
+pycryptodome==3.22.0
+
+# FHIR Resources for healthcare data standardization
+fhir.resources==8.0.0
+fhir-core==1.0.0
+
+# AWS Deployment
+boto3==1.34.93
+
+# Testing
+pytest==8.0.0
+
+# Security
+cryptography==42.0.8

@@ -21,6 +21,11 @@ from datetime import datetime, timedelta
 from src.api.hospitals import router as hospitals_router
 from src.api.pharmacies import router as pharmacies_router
 from src.api.wearables import router as wearables_router
+from src.api.provider_registry import router as provider_registry_router
+from src.api.dashboard import router as dashboard_router
+
+# Import integrations
+from src.integrations.healthdata_rewards import rewards_client
 
 # Import AI components
 from src.ai.standardizer import standardize_to_fhir
@@ -59,6 +64,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 app.include_router(hospitals_router)
 app.include_router(pharmacies_router)
 app.include_router(wearables_router)
+app.include_router(provider_registry_router)
+app.include_router(dashboard_router)
 
 @app.get("/")
 async def root():
@@ -67,8 +74,15 @@ async def root():
     """
     return {
         "service": "HealthData Gateway",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "status": "operational",
+        "features": [
+            "FHIR Standardization",
+            "Blockchain Consent Management",
+            "Provider Registry",
+            "Data Anonymization",
+            "HealthData Rewards Integration"
+        ],
         "docs_url": "/docs",
     }
 

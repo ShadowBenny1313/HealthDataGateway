@@ -66,8 +66,9 @@ def verify_consent(patient_id: str, token_or_requester: str) -> bool:
     Returns:
         bool: True if consent exists and is valid, False otherwise
     """
-    # In a real implementation, we would extract the requester from the token
-    # For simplicity, we assume token_or_requester is already the requester ID
+    # Extract requester from token if needed
+    # In a real implementation, we would decode the JWT token to extract the requester ID
+    # For simplicity in this implementation, we assume token_or_requester is the requester ID
     requester = token_or_requester
     
     if MOCK_MODE:
@@ -78,16 +79,54 @@ def verify_consent(patient_id: str, token_or_requester: str) -> bool:
                 expiration = _mock_consent_db[patient_id][requester]
                 return expiration > int(time.time())
         return False
+    else:
+        # Use blockchain contract
+        contract = _get_contract()
+        if not contract:
+            raise RuntimeError("Failed to initialize blockchain contract")
+            
+        # Call the consent verification function on the blockchain
+        return contract.functions.hasValidConsent(patient_id, requester).call()
+
+
+def verify_admin_role(token: str) -> bool:
+    """
+    Verify if the user has admin role/permissions
     
-    # Real blockchain implementation
-    contract = _get_contract()
-    if not contract:
-        raise Exception("Failed to initialize contract")
+    Args:
+        token: JWT token containing user info and roles
+        
+    Returns:
+        bool: True if user has admin role, False otherwise
+    """
+    # Check if we're in testing mode
+    admin_test_mode = os.getenv("ADMIN_TEST_MODE", "False").lower() == "true"
     
-    # Call the smart contract to verify consent
-    has_consent = contract.functions.hasValidConsent(patient_id, requester).call()
+    # For testing, accept specific test tokens
+    if admin_test_mode or MOCK_MODE:
+        # Accept test tokens for automated tests
+        if token in ["admin_test_token", "test_admin_token"]:
+            return True
     
-    return has_consent
+    # For production, decode the JWT token and verify admin role
+    import jwt
+    
+    try:
+        # Decode the JWT token
+        secret_key = os.getenv("JWT_SECRET_KEY", "development_secret_key")
+        decoded_token = jwt.decode(token, secret_key, algorithms=["HS256"])
+        
+        # Check if user has admin role
+        if "roles" in decoded_token and "admin" in decoded_token["roles"]:
+            return True
+            
+        return False
+    except Exception as e:
+        print(f"Error verifying admin role: {e}")
+        return False
+    
+
+
 
 def grant_consent(patient_id: str, requester: str, duration_days: int = 30) -> bool:
     """
@@ -203,3 +242,44 @@ def get_consent_expiration(patient_id: str, requester: str) -> Optional[int]:
     expiration = contract.functions.getConsentExpiration(patient_id, requester).call()
     
     return expiration if expiration > 0 else None
+
+
+def get_user_consents(patient_id: str) -> Dict[str, int]:
+    """
+    Get all active consents for a specific patient/user
+    
+    Args:
+        patient_id: The patient's unique identifier
+        
+    Returns:
+        Dict[str, int]: Dictionary of requester IDs to expiration timestamps
+    """
+    # Check if in mock mode
+    if MOCK_MODE:
+        # Return data from mock consent database
+        if patient_id in _mock_consent_db:
+            # Filter only active consents (expiration > current time)
+            current_time = int(time.time())
+            return {requester: expiration 
+                   for requester, expiration in _mock_consent_db[patient_id].items()
+                   if expiration > current_time}
+        return {}
+    
+    # Real blockchain implementation
+    contract = _get_contract()
+    if not contract:
+        raise Exception("Failed to initialize contract")
+    
+    # Call the smart contract to get all consents for the patient
+    # Note: In a real implementation, this would call a smart contract function
+    # that returns all active consents for a patient
+    requesters = contract.functions.getPatientRequesters(patient_id).call()
+    
+    # Get expiration for each requester
+    consents = {}
+    for requester in requesters:
+        expiration = contract.functions.getConsentExpiration(patient_id, requester).call()
+        if expiration > 0 and expiration > int(time.time()):
+            consents[requester] = expiration
+    
+    return consents

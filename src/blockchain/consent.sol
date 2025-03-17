@@ -39,10 +39,13 @@ contract DataConsent {
     function grantConsent(string memory patientId, address requester, uint256 durationDays) public {
         // In production, this would include verification of patient identity
         // For simplicity, we're allowing any transaction to grant consent
+        require(bytes(patientId).length > 0, "Patient ID cannot be empty");
+        require(requester != address(0), "Requester address cannot be zero");
+        require(durationDays > 0, "Duration must be greater than zero");
         
         patientConsent[patientId][requester] = true;
         
-        // Set expiration time
+        // Set expiration time based on duration days
         uint256 expirationTime = block.timestamp + (durationDays * 1 days);
         consentExpiration[patientId][requester] = expirationTime;
         
@@ -56,6 +59,8 @@ contract DataConsent {
      */
     function revokeConsent(string memory patientId, address requester) public {
         // In production, this would include verification of patient identity
+        require(bytes(patientId).length > 0, "Patient ID cannot be empty");
+        require(requester != address(0), "Requester address cannot be zero");
         
         patientConsent[patientId][requester] = false;
         consentExpiration[patientId][requester] = 0;
